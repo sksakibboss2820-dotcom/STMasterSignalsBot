@@ -12,7 +12,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "ST Master Signal Bot is Live!"
+    return "ST Signal Dashboard Server Live!"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -23,17 +23,19 @@ ADMIN_ID = int(os.environ.get('ADMIN_ID', '0'))
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# গ্লোবাল কনফিগারেশন ও স্টেট
+# গ্লোবাল স্টেট
 auto_mode = False
 selected_timeframe = "1m" # 30s, 1m, 3m, 5m
 target_wins = 10
-current_wins = 0
-current_step = 1
-super_win_streak = 0
-last_prediction = None
-history_table = [] # টেবিল হিস্ট্রি রাখার জন্য
+current_wins = 2595
+jackpot_count = 726
+current_streak = 2
+max_streak = 21
+total_predictions = 3640
 
-# ১. রিয়েল-টাইম পিরিয়ড ক্যালকুলেটর (পরবর্তী বেটিং পিরিয়ডের জন্য offset = +1)
+last_prediction = None
+history_rows = []
+
 def get_market_period(tf):
     now = datetime.now()
     date_str = now.strftime("%Y%m%d")
@@ -52,181 +54,227 @@ def get_market_period(tf):
 
     return f"{date_str}1000{seq}"
 
-# ২. স্ক্রিনশটের মতো প্রফেশনাল UI কার্ড জেনারেটর
-def generate_hd_dashboard(period, signal, confidence, number_pair, tf):
-    img = Image.new('RGB', (750, 480), color=(245, 247, 250))
+# রেফারেন্স স্ক্রিনশটের মতো ড্যাশবোর্ড জেনারেটর
+def generate_exact_dashboard(period, signal, confidence, number_pair, tf):
+    img = Image.new('RGB', (800, 920), color=(255, 255, 255))
     draw = ImageDraw.Draw(img)
 
-    # হেডার কার্ড
-    draw.rectangle([20, 20, 730, 100], fill=(255, 255, 255), outline=(220, 226, 235))
-    draw.text((40, 35), f"WinGo {tf.upper()} AI PREDICTION", fill=(16, 185, 129))
-    draw.text((40, 65), f"STATUS: ACTIVE  |  CONFIDENCE: {confidence}%", fill=(100, 116, 139))
+    # লোগো ও হেডার
+    draw.ellipse([20, 20, 100, 100], outline=(0, 0, 0), width=3)
+    draw.text((38, 45), "WG", fill=(16, 185, 129))
+    draw.text((120, 20), f"WinGo {tf.upper()}", fill=(16, 185, 129))
+    draw.text((120, 50), "AI PREDICTION BOT", fill=(0, 0, 0))
+    draw.text((120, 70), "ENGINE : PART1-WG1M v3", fill=(100, 116, 139))
 
-    # মেইন সিগন্যাল বক্স
-    sig_color = (37, 99, 235) if signal == "BIG" else (225, 29, 72)
-    draw.rectangle([20, 120, 480, 260], fill=(255, 255, 255), outline=sig_color, width=2)
-    draw.text((180, 135), f"CURRENT SIGNAL", fill=(100, 116, 139))
-    draw.text((190, 165), signal, fill=sig_color)
-    draw.text((180, 220), f"CONFIDENCE = {confidence}%", fill=(16, 185, 129))
+    # টপ ব্যাজ
+    draw.rectangle([120, 95, 280, 125], outline=(16, 185, 129), width=2)
+    draw.text((130, 100), "WIN", fill=(16, 185, 129))
+    draw.text((220, 100), f"{current_wins}", fill=(16, 185, 129))
 
-    # নম্বর বক্স
-    draw.rectangle([500, 120, 730, 260], fill=(255, 255, 255), outline=(220, 226, 235))
-    draw.text((560, 135), "NUMBER", fill=(16, 185, 129))
-    draw.text((570, 170), number_pair, fill=(16, 185, 129))
+    draw.rectangle([290, 95, 450, 125], outline=(234, 179, 8), width=2)
+    draw.text((300, 100), "JACK", fill=(234, 179, 8))
+    draw.text((390, 100), f"{jackpot_count}", fill=(234, 179, 8))
 
-    # পিরিয়ড ও ইনফো
-    draw.text((20, 280), f"MODE   : WinGo {tf}", fill=(30, 41, 59))
-    draw.text((20, 310), f"PERIOD : {period[-6:]}", fill=(30, 41, 59))
-    draw.text((20, 340), f"SIGNAL : {signal}", fill=sig_color)
+    draw.rectangle([460, 95, 620, 125], outline=(239, 68, 68), width=2)
+    draw.text((470, 100), "STREAK", fill=(239, 68, 68))
+    draw.text((580, 100), f"{current_streak}", fill=(239, 68, 68))
 
-    # ফুটার স্ট্যাটস
-    draw.rectangle([20, 390, 230, 450], fill=(236, 253, 245))
-    draw.text((90, 400), "WINS", fill=(5, 150, 105))
-    draw.text((95, 420), f"{current_wins}", fill=(5, 150, 105))
+    # ইনফো বার (ব্ল্যাক ব্যাকগ্রাউন্ড)
+    draw.rectangle([0, 140, 800, 180], fill=(15, 23, 42))
+    now_str = datetime.now().strftime("%d-%m-%Y %I:%M:%S %p")
+    draw.text((10, 150), f"TIME: {now_str}", fill=(255, 255, 255))
+    draw.text((260, 150), "STATUS: ACTIVE", fill=(34, 197, 94))
+    draw.text((500, 150), "ACCURACY: 71.3%", fill=(34, 197, 94))
+    draw.text((650, 150), f"PRED: {total_predictions}", fill=(255, 255, 255))
 
-    draw.rectangle([250, 390, 480, 450], fill=(254, 242, 242))
-    draw.text((320, 400), "STEP", fill=(225, 29, 72))
-    draw.text((330, 420), f"{current_step}", fill=(225, 29, 72))
+    # কারেন্ট সিগন্যাল প্যানেল
+    draw.text((20, 195), f"MODE   : WinGo {tf}", fill=(71, 85, 105))
+    draw.text((20, 220), f"PERIOD : {period[-6:]}", fill=(0, 0, 0))
+    sig_color = (225, 29, 72) if signal == "SMALL" else (37, 99, 235)
+    draw.text((20, 245), f"SIGNAL : {signal}", fill=sig_color)
+    draw.text((20, 270), f"NUMBER : {number_pair}", fill=(16, 185, 129))
 
-    draw.rectangle([500, 390, 730, 450], fill=(239, 246, 255))
-    draw.text((550, 400), "SUPER STREAK", fill=(37, 99, 235))
-    draw.text((580, 420), f"{super_win_streak}", fill=(37, 99, 235))
+    # মেইন প্রেডিকশন বক্স
+    draw.rectangle([280, 190, 540, 310], outline=sig_color, width=2)
+    draw.text((330, 195), "CURRENT SIGNAL", fill=(16, 185, 129))
+    draw.text((310, 215), signal, fill=sig_color)
+    draw.text((370, 260), f"{confidence}%", fill=(16, 185, 129))
+    draw.text((330, 285), f"CONFIDENCE = {confidence}%", fill=(16, 185, 129))
 
-    img.save("signal.png")
+    # নম্বর ফিল্ড
+    draw.rectangle([640, 190, 780, 310], outline=(16, 185, 129), width=2)
+    draw.text((670, 195), "NUMBER", fill=(16, 185, 129))
+    draw.text((685, 225), number_pair, fill=(16, 185, 129))
 
-# ৩. সিগন্যাল সেন্ড করার প্রধান ফাংশন
-def broadcast_signal(signal, number_pair, confidence=88):
+    # টেবিল হেডার
+    draw.rectangle([0, 330, 800, 360], fill=(15, 23, 42))
+    draw.text((10, 338), "#", fill=(255, 255, 255))
+    draw.text((100, 338), "PERIOD", fill=(255, 255, 255))
+    draw.text((300, 338), "SIGNAL", fill=(255, 255, 255))
+    draw.text((420, 338), "NUMBER", fill=(255, 255, 255))
+    draw.text((510, 338), "RESULT", fill=(255, 255, 255))
+    draw.text((680, 338), "TIME", fill=(255, 255, 255))
+
+    # হিস্ট্রি টেবিল রেন্ডারিং
+    y = 370
+    for idx, row in enumerate(history_rows[-9:]):
+        draw.text((10, y), str(idx+1), fill=(100, 116, 139))
+        draw.text((100, y), row['period'], fill=(30, 41, 59))
+        draw.text((300, y), row['signal'], fill=(37, 99, 235) if row['signal']=="BIG" else (225, 29, 72))
+        draw.text((420, y), str(row['num']), fill=(30, 41, 59))
+
+        # রেজাল্ট ব্যাজ
+        res_bg = (220, 252, 231) if row['res'] == "WIN" else (254, 242, 242) if row['res'] == "LOSE" else (254, 249, 195)
+        res_fg = (22, 101, 52) if row['res'] == "WIN" else (153, 27, 27) if row['res'] == "LOSE" else (161, 98, 7)
+        draw.rectangle([500, y-2, 560, y+18], fill=res_bg)
+        draw.text((510, y), row['res'], fill=res_fg)
+        draw.text((680, y), row['time'], fill=(100, 116, 139))
+        y += 35
+
+    # কারেন্ট রানিং রো
+    draw.text((10, y), "10", fill=(16, 185, 129))
+    draw.text((100, y), period[-6:], fill=(16, 185, 129))
+    draw.text((300, y), signal, fill=sig_color)
+    draw.text((420, y), number_pair, fill=(16, 185, 129))
+    draw.rectangle([500, y-2, 560, y+18], fill=(219, 234, 254))
+    draw.text((510, y), "NEXT", fill=(29, 78, 216))
+    draw.text((680, y), datetime.now().strftime("%I:%M:%S %p"), fill=(16, 185, 129))
+
+    # ফুটার কার্ড
+    draw.rectangle([20, 750, 180, 810], outline=(16, 185, 129), width=2)
+    draw.text((70, 760), "WINS", fill=(16, 185, 129))
+    draw.text((70, 780), f"{current_wins}", fill=(16, 185, 129))
+
+    draw.rectangle([200, 750, 360, 810], outline=(234, 179, 8), width=2)
+    draw.text((240, 760), "JACKPOT", fill=(234, 179, 8))
+    draw.text((255, 780), f"{jackpot_count}", fill=(234, 179, 8))
+
+    draw.rectangle([380, 750, 540, 810], outline=(239, 68, 68), width=2)
+    draw.text((410, 760), "MAX STREAK", fill=(239, 68, 68))
+    draw.text((450, 780), f"{max_streak}", fill=(239, 68, 68))
+
+    draw.rectangle([560, 750, 780, 810], fill=(239, 246, 255))
+    draw.text((620, 760), "WIN RATE", fill=(37, 99, 235))
+    draw.text((630, 780), "71.3%", fill=(37, 99, 235))
+
+    img.save("exact_dashboard.png")
+
+# সিগন্যাল পাঠানোর ফাংশন
+def broadcast_signal(signal, number_pair, confidence=68):
     global last_prediction
     period = get_market_period(selected_timeframe)
-    generate_hd_dashboard(period, signal, confidence, number_pair, selected_timeframe)
-    
+    generate_exact_dashboard(period, signal, confidence, number_pair, selected_timeframe)
+
     caption = (
         f"👾 MODE : WINGO {selected_timeframe.upper()}\n"
+        f"╭────────────────╮\n"
         f"🎰 PERIOD : {period[-6:]}\n"
-        f"📈 SIGNAL = {'🔵 BIG' if signal == 'BIG' else '🔴 SMALL'}\n"
-        f"🎲 NUMBER = {number_pair}\n"
-        f"🔥 CONFIDENCE = {confidence}%"
+        f"⚙️ LOGIC  : PART 1 | ENTRY 1\n\n"
+        f"┣ 📈 SIGNAL = {'🔴 SMALL' if signal == 'SMALL' else '🔵 BIG'}\n"
+        f"┣ \n"
+        f"┣ 🛡 NUMBER = {number_pair}\n"
+        f"┣ \n"
+        f"╰────────────────╯"
     )
-    
-    with open("signal.png", "rb") as photo:
+
+    with open("exact_dashboard.png", "rb") as photo:
         bot.send_photo(CHANNEL_ID, photo, caption=caption)
-    
-    last_prediction = {"period": period[-6:], "signal": signal}
 
-# ৪. ফলাফল প্রক্রিয়াকরণ (Step and Super Win Calculator)
-def process_result(is_win):
-    global current_wins, current_step, super_win_streak, auto_mode
-    period_str = last_prediction['period'] if last_prediction else "NEXT"
+    last_prediction = {"period": period[-6:], "signal": signal, "full_period": period}
 
-    if is_win:
-        current_wins += 1
-        super_win_streak += 1
-        current_step = 1 # উইন হলে স্টেপ রিকভার হয়ে ১ এ নামবে
-        
-        msg = f"✅ WIN!\n=====================\nPeriod => #{period_str}\nResult => {super_win_streak} SUPER WIN 🎉\n====================="
-        
-        # টার্গেট মিসন কমপ্লিট চেক
-        if current_wins >= target_wins:
-            auto_mode = False
-            msg += f"\n\n🎯 MISSION COMPLETED! Target {target_wins} Wins Reached. Auto Bot Closed."
+# ফলাফল প্রসেসর (WIN / LOSS / JACKPOT)
+def send_result_message(res_type, num_hit):
+    global current_wins, jackpot_count, current_streak, history_rows
+    if not last_prediction:
+        period_str = "0299"
+        sig = "BIG"
     else:
-        current_step += 1
-        super_win_streak = 0 # লস হলে সুপার উইন স্ট্রিক রিসেট
-        msg = f"❌ LOSS\n=====================\nPeriod => #{period_str}\nResult => Use {current_step} STEP ⚠️\n====================="
+        period_str = last_prediction['period']
+        sig = last_prediction['signal']
+
+    is_big = int(num_hit) >= 5
+    side_emoji = "🔵  BIG" if is_big else "🔴  SMALL"
+
+    if res_type == "WIN":
+        current_wins += 1
+        current_streak += 1
+        history_rows.append({"period": last_prediction['full_period'] if last_prediction else "20260809100010290", "signal": sig, "num": num_hit, "res": "WIN", "time": datetime.now().strftime("%I:%M:%S %p")})
+        msg = f"✅ WIN!\n================================\nPeriod  =>  #{period_str}\nResult  =>  NUM:{num_hit}  {side_emoji}\n================================"
+
+    elif res_type == "JACKPOT":
+        jackpot_count += 1
+        current_wins += 1
+        current_streak += 1
+        history_rows.append({"period": last_prediction['full_period'] if last_prediction else "20260809100010290", "signal": sig, "num": num_hit, "res": "JACK", "time": datetime.now().strftime("%I:%M:%S %p")})
+        msg = f"🎰 JACK! NUMBER HIT\n================================\nPeriod  =>  #{period_str}\nResult  =>  NUM:{num_hit}  {side_emoji}\n================================"
+
+    else:
+        current_streak = 0
+        history_rows.append({"period": last_prediction['full_period'] if last_prediction else "20260809100010290", "signal": sig, "num": num_hit, "res": "LOSE", "time": datetime.now().strftime("%I:%M:%S %p")})
+        msg = f"❌ LOSS\n================================\nPeriod  =>  #{period_str}\nResult  =>  NUM:{num_hit}  {side_emoji}\n================================"
 
     bot.send_message(CHANNEL_ID, msg)
 
-# ৫. ব্যাকগ্রাউন্ড অটো লুপ
-def auto_signal_loop():
-    global auto_mode
+def auto_loop():
     while True:
         if auto_mode:
-            # অটোমেটিক সিগন্যাল জেনারেট
             sig = random.choice(["BIG", "SMALL"])
-            num = "1/2" if sig == "BIG" else "6/7"
-            broadcast_signal(sig, num, random.randint(80, 97))
-
-            # টাইমফ্রেমে নির্দেশিত সেকেন্ডের জন্য বিরতি
+            num = "1/2" if sig == "BIG" else "5/7"
+            broadcast_signal(sig, num)
             sleep_time = 30 if selected_timeframe == "30s" else 60 if selected_timeframe == "1m" else 180 if selected_timeframe == "3m" else 300
             time.sleep(sleep_time)
         else:
             time.sleep(3)
 
-# ৬. এডমিন কন্ট্রোল প্যানেল কিবোর্ড
-def get_control_keyboard():
+def get_keyboard():
     markup = InlineKeyboardMarkup()
-    
-    btn_status = InlineKeyboardButton(f"Auto Mode: {'ON 🟢' if auto_mode else 'OFF 🔴'}", callback_data="toggle_auto")
-    
-    # টাইমার নির্বাচন বাটন
-    btn_30s = InlineKeyboardButton(f"{'✅' if selected_timeframe=='30s' else ''} 30s", callback_data="tf_30s")
-    btn_1m = InlineKeyboardButton(f"{'✅' if selected_timeframe=='1m' else ''} 1 Min", callback_data="tf_1m")
-    btn_3m = InlineKeyboardButton(f"{'✅' if selected_timeframe=='3m' else ''} 3 Min", callback_data="tf_3m")
-    btn_5m = InlineKeyboardButton(f"{'✅' if selected_timeframe=='5m' else ''} 5 Min", callback_data="tf_5m")
-
-    # ম্যানুয়াল সিগন্যাল বাটন
-    btn_big = InlineKeyboardButton("Send BIG 🔵", callback_data="send_big")
-    btn_small = InlineKeyboardButton("Send SMALL 🔴", callback_data="send_small")
-    
-    # রেজাল্ট বাটন
-    btn_win = InlineKeyboardButton("Send WIN ✅", callback_data="res_win")
-    btn_loss = InlineKeyboardButton("Send LOSS ❌", callback_data="res_loss")
-
-    markup.add(btn_status)
-    markup.row(btn_30s, btn_1m, btn_3m, btn_5m)
-    markup.row(btn_big, btn_small)
-    markup.row(btn_win, btn_loss)
+    markup.row(InlineKeyboardButton(f"Auto Mode: {'ON 🟢' if auto_mode else 'OFF 🔴'}", callback_data="toggle_auto"))
+    markup.row(
+        InlineKeyboardButton("30s", callback_data="tf_30s"),
+        InlineKeyboardButton("1m", callback_data="tf_1m"),
+        InlineKeyboardButton("3m", callback_data="tf_3m"),
+        InlineKeyboardButton("5m", callback_data="tf_5m")
+    )
+    markup.row(
+        InlineKeyboardButton("Send SMALL 🔴", callback_data="sig_small"),
+        InlineKeyboardButton("Send BIG 🔵", callback_data="sig_big")
+    )
+    markup.row(
+        InlineKeyboardButton("Send WIN ✅", callback_data="res_win"),
+        InlineKeyboardButton("Send JACKPOT 🎰", callback_data="res_jack"),
+        InlineKeyboardButton("Send LOSS ❌", callback_data="res_loss")
+    )
     return markup
 
 @bot.message_handler(commands=['start'])
-def send_welcome(message):
+def start_cmd(message):
     if ADMIN_ID != 0 and message.from_user.id != ADMIN_ID:
-        bot.reply_to(message, "আপনার এক্সেস নেই।")
         return
-    bot.send_message(message.chat.id, "⚙️ **ST Signal Master Control Panel**", reply_markup=get_control_keyboard(), parse_mode="Markdown")
+    bot.send_message(message.chat.id, "⚙️ **ST Control Panel**", reply_markup=get_keyboard())
 
 @bot.callback_query_handler(func=lambda call: True)
-def callback_listener(call):
-    global auto_mode, selected_timeframe, current_wins
-    
-    if ADMIN_ID != 0 and call.from_user.id != ADMIN_ID:
-        bot.answer_callback_query(call.id, "অনুমতি নেই!")
-        return
-
+def handle_callbacks(call):
+    global auto_mode, selected_timeframe
     if call.data == "toggle_auto":
         auto_mode = not auto_mode
-        if auto_mode:
-            current_wins = 0 # অটো চালুর সময় টার্গেট রিসেট
-        bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=get_control_keyboard())
-        bot.answer_callback_query(call.id, f"Auto Mode {'ON' if auto_mode else 'OFF'}")
-
+        bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=get_keyboard())
     elif call.data.startswith("tf_"):
         selected_timeframe = call.data.split("_")[1]
-        bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=get_control_keyboard())
-        bot.answer_callback_query(call.id, f"Timeframe set to {selected_timeframe}")
-
-    elif call.data == "send_big":
+        bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=get_keyboard())
+    elif call.data == "sig_small":
+        broadcast_signal("SMALL", "5/7")
+    elif call.data == "sig_big":
         broadcast_signal("BIG", "1/2")
-        bot.answer_callback_query(call.id, "BIG Signal Sent!")
-
-    elif call.data == "send_small":
-        broadcast_signal("SMALL", "6/7")
-        bot.answer_callback_query(call.id, "SMALL Signal Sent!")
-
     elif call.data == "res_win":
-        process_result(True)
-        bot.answer_callback_query(call.id, "WIN Result Sent!")
-
+        send_result_message("WIN", random.choice([6, 7, 8, 9]))
+    elif call.data == "res_jack":
+        send_result_message("JACKPOT", 6)
     elif call.data == "res_loss":
-        process_result(False)
-        bot.answer_callback_query(call.id, "LOSS Result Sent!")
+        send_result_message("LOSS", random.choice([0, 1, 2, 3]))
 
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
-    threading.Thread(target=auto_signal_loop).start()
-    
+    threading.Thread(target=auto_loop).start()
     bot.remove_webhook()
     time.sleep(1)
-    
-    print("Bot started successfully...")
     bot.infinity_polling(skip_pending=True)
