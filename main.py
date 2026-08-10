@@ -12,7 +12,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "ST Signal Engine Running Successfully!"
+    return "ST Signal Engine Running Smoothly!"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -23,7 +23,7 @@ ADMIN_ID = int(os.environ.get('ADMIN_ID', '0'))
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# গ্লোবাল স্টেট ও ট্র্যাকিং variables
+# গ্লোবাল ট্র্যাকিং স্টেটস
 auto_mode = False
 selected_timeframe = "1m" # 30s, 1m, 3m, 5m
 current_wins = 2594
@@ -34,7 +34,7 @@ total_predictions = 3639
 
 last_prediction = None
 
-# ডিফল্ট ডামি হিস্ট্রি (রেফারেন্স ইমেজের মতো)
+# রেফারেন্স স্ক্রিনশটের হুবহু ইনিশিয়াল ডেটা
 history_rows = [
     {"period": "20260809100010288", "signal": "SMALL", "num": "1", "res": "WIN", "time": "10:29:42 AM"},
     {"period": "20260809100010290", "signal": "BIG", "num": "2", "res": "LOSE", "time": "10:29:42 AM"},
@@ -46,6 +46,21 @@ history_rows = [
     {"period": "20260809100010297", "signal": "BIG", "num": "0", "res": "LOSE", "time": "10:29:42 AM"},
     {"period": "20260809100010299", "signal": "BIG", "num": "8", "res": "WIN", "time": "10:29:43 AM"},
 ]
+
+# সিস্টেম ডায়নামিক ফন্ট লোডার (Large & Crisp Fonts)
+def get_font(size, bold=False):
+    font_paths = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "arial.ttf"
+    ]
+    for path in font_paths:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except:
+                pass
+    return ImageFont.load_default()
 
 def get_market_period(tf):
     now = datetime.now()
@@ -65,167 +80,179 @@ def get_market_period(tf):
 
     return f"{date_str}1000{seq}"
 
-# পারফেক্ট ইউজার লেআউট ইমেজ জেনারেটর
+# হুবহু রেফারেন্স স্ক্রিনশট রেন্ডারিং ইঞ্জিন
 def generate_exact_dashboard(period, signal, confidence, number_pair, tf):
     img = Image.new('RGB', (1000, 1150), color=(255, 255, 255))
     draw = ImageDraw.Draw(img)
 
-    tf_label = "30 Sec" if tf=="30s" else "1 Min" if tf=="1m" else "3 Min" if tf=="3m" else "5 Min"
+    tf_label = "30 Sec" if tf=="30s" else "1 Min" if tf=="1m" else "3 Min" if tf=="5m" else "1 Min"
+
+    # ফন্ট সাইজ লোড
+    f_title = get_font(42, bold=True)
+    f_sub = get_font(20, bold=True)
+    f_badge = get_font(22, bold=True)
+    f_info_head = get_font(14)
+    f_info_val = get_font(18, bold=True)
+    f_panel = get_font(22, bold=True)
+    f_big_sig = get_font(52, bold=True)
+    f_big_num = get_font(38, bold=True)
+    f_table = get_font(18, bold=True)
+    f_footer_num = get_font(26, bold=True)
+    f_footer_txt = get_font(16, bold=True)
 
     # ১. হেডার লোগো
     draw.ellipse([20, 20, 130, 130], outline=(0, 0, 0), width=4)
-    draw.text((43, 50), "WG", fill=(16, 185, 129))
-    draw.text((150, 20), f"WinGo {tf_label}", fill=(16, 185, 129))
-    draw.text((150, 65), "AI PREDICTION BOT", fill=(0, 0, 0))
-    draw.text((150, 95), "ENGINE : PART5-WG1M v3", fill=(100, 116, 139))
+    draw.text((42, 50), "WG", fill=(16, 185, 129), font=f_title)
+    
+    draw.text((150, 18), f"WinGo {tf_label}", fill=(16, 185, 129), font=f_title)
+    draw.text((150, 68), "AI PREDICTION BOT", fill=(0, 0, 0), font=f_sub)
+    draw.text((150, 95), "ENGINE : PART5-WG1M v3", fill=(100, 116, 139), font=f_info_head)
 
-    # টপ স্ট্যাট ব্যাজ (৩টি বক্স)
-    # WIN
+    # টপ স্ট্যাট ব্যাজ (WIN, JACK, STREAK)
     draw.rectangle([148, 120, 352, 162], outline=(16, 185, 129), width=2)
-    draw.text((160, 128), "WIN", fill=(16, 185, 129))
-    draw.text((284, 128), f"{current_wins}", fill=(16, 185, 129))
+    draw.text((160, 126), "WIN", fill=(16, 185, 129), font=f_badge)
+    draw.text((275, 126), f"{current_wins}", fill=(16, 185, 129), font=f_badge)
 
-    # JACK
     draw.rectangle([368, 120, 572, 162], outline=(234, 179, 8), width=2)
-    draw.text((380, 128), "JACK", fill=(234, 179, 8))
-    draw.text((518, 128), f"{jackpot_count}", fill=(234, 179, 8))
+    draw.text((380, 126), "JACK", fill=(234, 179, 8), font=f_badge)
+    draw.text((505, 126), f"{jackpot_count}", fill=(234, 179, 8), font=f_badge)
 
-    # STREAK
     draw.rectangle([586, 120, 790, 162], outline=(239, 68, 68), width=2)
-    draw.text((598, 128), "STREAK", fill=(239, 68, 68))
-    draw.text((764, 128), f"{current_streak}", fill=(239, 68, 68))
+    draw.text((598, 126), "STREAK", fill=(239, 68, 68), font=f_badge)
+    draw.text((760, 126), f"{current_streak}", fill=(239, 68, 68), font=f_badge)
 
     # ২. ইনফো বার (ব্ল্যাক স্ট্রিপ)
     draw.rectangle([0, 175, 1000, 230], fill=(10, 15, 25))
     now_str = datetime.now().strftime("%d-%m-%Y %I:%M:%S %p")
     
-    draw.text((10, 182), "TIME", fill=(148, 163, 184))
-    draw.text((10, 198), now_str, fill=(255, 255, 255))
+    draw.text((10, 182), "TIME", fill=(148, 163, 184), font=f_info_head)
+    draw.text((10, 198), now_str, fill=(255, 255, 255), font=f_info_val)
 
-    draw.text((260, 182), "STATUS", fill=(148, 163, 184))
-    draw.text((260, 198), "ACTIVE", fill=(34, 197, 94))
+    draw.text((260, 182), "STATUS", fill=(148, 163, 184), font=f_info_head)
+    draw.text((260, 198), "ACTIVE", fill=(34, 197, 94), font=f_info_val)
 
-    draw.text((512, 182), "ACCURACY", fill=(148, 163, 184))
-    draw.text((512, 198), "71.3%", fill=(34, 197, 94))
+    draw.text((512, 182), "ACCURACY", fill=(148, 163, 184), font=f_info_head)
+    draw.text((512, 198), "71.3%", fill=(34, 197, 94), font=f_info_val)
 
-    draw.text((762, 182), "PREDICTIONS", fill=(148, 163, 184))
-    draw.text((762, 198), f"{total_predictions}", fill=(255, 255, 255))
+    draw.text((762, 182), "PREDICTIONS", fill=(148, 163, 184), font=f_info_head)
+    draw.text((762, 198), f"{total_predictions}", fill=(255, 255, 255), font=f_info_val)
 
     # ৩. কারেন্ট সিগন্যাল প্যানেল
-    draw.text((28, 245), "MODE", fill=(100, 116, 139))
-    draw.text((120, 245), f": WinGo {tf_label}", fill=(0, 0, 0))
+    draw.text((28, 245), "MODE", fill=(100, 116, 139), font=f_panel)
+    draw.text((120, 245), f": WinGo {tf_label}", fill=(0, 0, 0), font=f_panel)
 
-    draw.text((28, 275), "PERIOD", fill=(100, 116, 139))
-    draw.text((120, 275), f": {period[-6:]}", fill=(0, 0, 0))
+    draw.text((28, 280), "PERIOD", fill=(100, 116, 139), font=f_panel)
+    draw.text((120, 280), f": {period[-6:]}", fill=(0, 0, 0), font=f_panel)
 
     sig_color = (225, 29, 72) if signal == "SMALL" else (37, 99, 235)
-    draw.text((28, 305), "SIGNAL", fill=(100, 116, 139))
-    draw.text((120, 305), f": {signal}", fill=sig_color)
+    draw.text((28, 315), "SIGNAL", fill=(100, 116, 139), font=f_panel)
+    draw.text((120, 315), f": {signal}", fill=sig_color, font=f_panel)
 
-    draw.text((28, 335), "NUMBER", fill=(100, 116, 139))
-    draw.text((120, 335), f": {number_pair}", fill=(16, 185, 129))
+    draw.text((28, 350), "NUMBER", fill=(100, 116, 139), font=f_panel)
+    draw.text((120, 350), f": {number_pair}", fill=(16, 185, 129), font=f_panel)
 
-    # সেন্ট্রাল সিগন্যাল বক্স
-    draw.rectangle([354, 245, 686, 385], outline=sig_color, width=2)
-    draw.text((366, 250), "->", fill=(16, 185, 129))
-    draw.text((446, 250), "CURRENT SIGNAL", fill=(16, 185, 129))
-    draw.text((660, 250), "<-", fill=(16, 185, 129))
+    # সেন্ট্রাল প্রেডিকশন বক্স
+    draw.rectangle([354, 245, 686, 385], outline=sig_color, width=3)
+    draw.text((366, 250), "->", fill=(16, 185, 129), font=f_info_head)
+    draw.text((435, 248), "CURRENT SIGNAL", fill=(16, 185, 129), font=f_info_val)
+    draw.text((660, 250), "<-", fill=(16, 185, 129), font=f_info_head)
 
-    draw.text((400, 275), signal, fill=sig_color)
-    draw.text((480, 335), f"{confidence}%", fill=(16, 185, 129))
-    draw.text((426, 368), f"CONFIDENCE = {confidence}%", fill=(16, 185, 129))
+    draw.text((395, 272), signal, fill=sig_color, font=f_big_sig)
+    draw.text((470, 330), f"{confidence}%", fill=(16, 185, 129), font=f_sub)
+    draw.text((415, 362), f"CONFIDENCE = {confidence}%", fill=(16, 185, 129), font=f_info_val)
 
-    # ডানদিকের নম্বর বক্স
-    draw.rectangle([815, 250, 982, 382], outline=(16, 185, 129), width=2)
-    draw.text((862, 258), "NUMBER", fill=(16, 185, 129))
-    draw.text((866, 285), number_pair, fill=(16, 185, 129))
-    draw.text((830, 322), "OPPOSITE SIDE", fill=(16, 185, 129))
+    # নম্বর বক্স
+    draw.rectangle([815, 245, 982, 385], outline=(16, 185, 129), width=3)
+    draw.text((852, 252), "NUMBER", fill=(16, 185, 129), font=f_info_val)
+    draw.text((865, 275), number_pair, fill=(16, 185, 129), font=f_big_num)
+    draw.text((825, 322), "OPPOSITE SIDE", fill=(16, 185, 129), font=f_info_head)
     opp_text = "SMALL NUMBERS" if signal=="BIG" else "BIG NUMBERS"
-    draw.text((840, 338), opp_text, fill=(225, 29, 72))
+    draw.text((830, 338), opp_text, fill=(225, 29, 72), font=f_info_head)
 
-    # ৪. হিস্ট্রি টেবিল
+    # ৪. টেবিল হেডার
     draw.rectangle([0, 410, 1000, 436], fill=(10, 15, 25))
-    draw.text((26, 416), "#", fill=(255, 255, 255))
-    draw.text((172, 416), "PERIOD", fill=(255, 255, 255))
-    draw.text((380, 416), "SIGNAL", fill=(255, 255, 255))
-    draw.text((495, 416), "NUMBER", fill=(255, 255, 255))
-    draw.text((621, 416), "RESULT", fill=(255, 255, 255))
-    draw.text((838, 416), "TIME", fill=(255, 255, 255))
+    draw.text((26, 414), "#", fill=(255, 255, 255), font=f_info_val)
+    draw.text((172, 414), "PERIOD", fill=(255, 255, 255), font=f_info_val)
+    draw.text((380, 414), "SIGNAL", fill=(255, 255, 255), font=f_info_val)
+    draw.text((495, 414), "NUMBER", fill=(255, 255, 255), font=f_info_val)
+    draw.text((621, 414), "RESULT", fill=(255, 255, 255), font=f_info_val)
+    draw.text((838, 414), "TIME", fill=(255, 255, 255), font=f_info_val)
 
-    y = 445
+    # টেবিল ডাটা রেন্ডারিং
+    y = 442
     display_history = history_rows[-9:]
     for idx, row in enumerate(display_history):
         bg_row = (248, 250, 252) if idx % 2 == 1 else (255, 255, 255)
-        draw.rectangle([0, y-5, 1000, y+35], fill=bg_row)
+        draw.rectangle([0, y-2, 1000, y+38], fill=bg_row)
 
-        draw.text((26, y+5), str(idx+1), fill=(100, 116, 139))
-        draw.text((122, y+5), row['period'], fill=(30, 41, 59))
+        draw.text((26, y+5), str(idx+1), fill=(100, 116, 139), font=f_table)
+        draw.text((122, y+5), row['period'], fill=(30, 41, 59), font=f_table)
         
         s_col = (225, 29, 72) if row['signal'] == "SMALL" else (37, 99, 235)
-        draw.text((385, y+5), row['signal'], fill=s_col)
-        draw.text((526, y+5), str(row['num']), fill=(30, 41, 59))
+        draw.text((385, y+5), row['signal'], fill=s_col, font=f_table)
+        draw.text((526, y+5), str(row['num']), fill=(30, 41, 59), font=f_table)
 
         # রেজাল্ট ব্যাজ
         res = row['res']
         if res == "WIN":
-            draw.rectangle([594, y+1, 668, y+27], fill=(220, 252, 231))
-            draw.text((618, y+5), "WIN", fill=(22, 101, 52))
+            draw.rectangle([594, y+2, 668, y+30], fill=(220, 252, 231))
+            draw.text((612, y+5), "WIN", fill=(22, 101, 52), font=f_table)
         elif res == "LOSE":
-            draw.rectangle([594, y+1, 668, y+27], fill=(254, 226, 226))
-            draw.text((614, y+5), "LOSE", fill=(185, 28, 28))
+            draw.rectangle([594, y+2, 668, y+30], fill=(254, 226, 226))
+            draw.text((606, y+5), "LOSE", fill=(185, 28, 28), font=f_table)
         else: # JACK
-            draw.rectangle([594, y+1, 668, y+27], fill=(254, 249, 195))
-            draw.text((614, y+5), "JACK", fill=(161, 98, 7))
+            draw.rectangle([594, y+2, 668, y+30], fill=(254, 249, 195))
+            draw.text((606, y+5), "JACK", fill=(161, 98, 7), font=f_table)
 
-        draw.text((812, y+5), row['time'], fill=(100, 116, 139))
+        draw.text((812, y+5), row['time'], fill=(100, 116, 139), font=f_table)
         y += 42
 
-    # ১০ নম্বর রানিং রো
-    draw.rectangle([0, y-5, 1000, y+35], fill=(255, 255, 255))
-    draw.text((22, y+5), "10", fill=(16, 185, 129))
-    draw.text((172, y+5), period[-6:], fill=(16, 185, 129))
-    draw.text((385, y+5), signal, fill=sig_color)
-    draw.text((520, y+5), number_pair, fill=(16, 185, 129))
+    # ১০ম রানিং রো
+    draw.rectangle([0, y-2, 1000, y+38], fill=(255, 255, 255))
+    draw.text((22, y+5), "10", fill=(16, 185, 129), font=f_table)
+    draw.text((172, y+5), period[-6:], fill=(16, 185, 129), font=f_table)
+    draw.text((385, y+5), signal, fill=sig_color, font=f_table)
+    draw.text((520, y+5), number_pair, fill=(16, 185, 129), font=f_table)
 
-    draw.rectangle([594, y+1, 668, y+27], fill=(219, 234, 254))
-    draw.text((614, y+5), "NEXT", fill=(29, 78, 216))
+    draw.rectangle([594, y+2, 668, y+30], fill=(219, 234, 254))
+    draw.text((606, y+5), "NEXT", fill=(29, 78, 216), font=f_table)
 
-    draw.text((806, y+5), datetime.now().strftime("%I:%M:%S %p"), fill=(16, 185, 129))
+    draw.text((806, y+5), datetime.now().strftime("%I:%M:%S %p"), fill=(16, 185, 129), font=f_table)
 
-    # ৫. ফুটারে ৫টি ইনফো কার্ড
+    # ৫. ফুটার কার্ড
     fy = 885
     # WINS
     draw.rectangle([18, fy, 204, fy+70], outline=(16, 185, 129), width=2)
-    draw.text((93, fy+10), "WINS", fill=(16, 185, 129))
-    draw.text((82, fy+32), f"{current_wins}", fill=(16, 185, 129))
+    draw.text((88, fy+10), "WINS", fill=(16, 185, 129), font=f_info_head)
+    draw.text((78, fy+32), f"{current_wins}", fill=(16, 185, 129), font=f_footer_num)
 
     # JACKPOT
     draw.rectangle([214, fy, 400, fy+70], outline=(234, 179, 8), width=2)
-    draw.text((276, fy+10), "JACKPOT", fill=(234, 179, 8))
-    draw.text((285, fy+32), f"{jackpot_count}", fill=(234, 179, 8))
+    draw.text((270, fy+10), "JACKPOT", fill=(234, 179, 8), font=f_info_head)
+    draw.text((280, fy+32), f"{jackpot_count}", fill=(234, 179, 8), font=f_footer_num)
 
     # MAX STREAK
     draw.rectangle([410, fy, 596, fy+70], outline=(239, 68, 68), width=2)
-    draw.text((454, fy+10), "MAX STREAK", fill=(239, 68, 68))
-    draw.text((488, fy+32), f"{max_streak}", fill=(239, 68, 68))
+    draw.text((450, fy+10), "MAX STREAK", fill=(239, 68, 68), font=f_info_head)
+    draw.text((485, fy+32), f"{max_streak}", fill=(239, 68, 68), font=f_footer_num)
 
     # WIN RATE
     draw.rectangle([606, fy, 792, fy+70], fill=(239, 246, 255))
-    draw.text((662, fy+10), "WIN RATE", fill=(37, 99, 235))
-    draw.text((658, fy+32), "71.3%", fill=(37, 99, 235))
+    draw.text((660, fy+10), "WIN RATE", fill=(37, 99, 235), font=f_info_head)
+    draw.text((655, fy+32), "71.3%", fill=(37, 99, 235), font=f_footer_num)
 
     # CONFIDENCE
     draw.rectangle([802, fy, 982, fy+70], fill=(243, 232, 255))
-    draw.text((845, fy+10), "CONFIDENCE", fill=(147, 51, 234))
-    draw.text((862, fy+32), f"{confidence}%", fill=(147, 51, 234))
+    draw.text((840, fy+10), "CONFIDENCE", fill=(147, 51, 234), font=f_info_head)
+    draw.text((860, fy+32), f"{confidence}%", fill=(147, 51, 234), font=f_footer_num)
 
     # ফুটার স্ট্রিপ
     draw.rectangle([0, 960, 1000, 1000], fill=(10, 15, 25))
-    draw.text((10, 965), f"WinGo {tf_label}", fill=(34, 197, 94))
-    draw.text((10, 980), "AI PREDICTION BOT", fill=(148, 163, 184))
+    draw.text((10, 965), f"WinGo {tf_label}", fill=(34, 197, 94), font=f_info_head)
+    draw.text((10, 980), "AI PREDICTION BOT", fill=(148, 163, 184), font=f_info_head)
 
-    draw.text((448, 972), "100% SECURE", fill=(255, 255, 255))
-    draw.text((828, 972), "MADE FOR WINNERS", fill=(234, 179, 8))
+    draw.text((440, 972), "100% SECURE", fill=(255, 255, 255), font=f_footer_txt)
+    draw.text((815, 972), "MADE FOR WINNERS", fill=(234, 179, 8), font=f_footer_txt)
 
     img.save("exact_dashboard.png")
 
@@ -386,8 +413,13 @@ if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
     threading.Thread(target=auto_loop).start()
     
-    bot.remove_webhook()
-    time.sleep(1)
-    
-    print("Bot loop started successfully...")
-    bot.infinity_polling(skip_pending=True)
+    # 409 Conflict দূর করার সেফ পোলিং লুপ
+    while True:
+        try:
+            bot.remove_webhook()
+            time.sleep(1)
+            print("Starting TeleBot infinity polling...")
+            bot.infinity_polling(skip_pending=True, timeout=30, long_polling_timeout=30)
+        except Exception as e:
+            print(f"Polling error encountered: {e}")
+            time.sleep(3)
