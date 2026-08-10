@@ -33,21 +33,9 @@ max_streak = 21
 total_predictions = 3641
 
 last_prediction = None
+history_rows = []
 
-# রেফারেন্স হিস্ট্রি ডেটা
-history_rows = [
-    {"period": "20260809100010290", "signal": "BIG", "num": "2", "res": "LOSE", "time": "10:29:42 AM"},
-    {"period": "20260809100010291", "signal": "BIG", "num": "7", "res": "WIN", "time": "10:29:42 AM"},
-    {"period": "20260809100010292", "signal": "BIG", "num": "2", "res": "JACK", "time": "10:29:42 AM"},
-    {"period": "20260809100010293", "signal": "BIG", "num": "2", "res": "JACK", "time": "10:29:42 AM"},
-    {"period": "20260809100010295", "signal": "SMALL", "num": "8", "res": "LOSE", "time": "10:29:42 AM"},
-    {"period": "20260809100010296", "signal": "SMALL", "num": "1", "res": "WIN", "time": "10:29:42 AM"},
-    {"period": "20260809100010297", "signal": "BIG", "num": "0", "res": "LOSE", "time": "10:29:42 AM"},
-    {"period": "20260809100010299", "signal": "BIG", "num": "8", "res": "WIN", "time": "10:29:43 AM"},
-    {"period": "20260810100010166", "signal": "SMALL", "num": "1", "res": "WIN", "time": "02:45:50 AM"},
-]
-
-# সিস্টেম ডায়নামিক ফন্ট লোডার (Large & Crisp Fonts)
+# সিস্টেমে ফন্ট লোডার
 def get_font(size, bold=False):
     font_paths = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -62,30 +50,69 @@ def get_font(size, bold=False):
                 pass
     return ImageFont.load_default()
 
+# HGNICE/WinGo এর নিখুঁত পিরিয়ড জেনারেটর
 def get_market_period(tf):
     now = datetime.now()
     date_str = now.strftime("%Y%m%d")
     total_seconds = now.hour * 3600 + now.minute * 60 + now.second
     
     if tf == "30s":
-        seq = (total_seconds // 30) + 1 + 10000
+        seq = (total_seconds // 30) + 1
     elif tf == "1m":
-        seq = (total_seconds // 60) + 1 + 10000
+        seq = (total_seconds // 60) + 1
     elif tf == "3m":
-        seq = (total_seconds // 180) + 1 + 10000
+        seq = (total_seconds // 180) + 1
     elif tf == "5m":
-        seq = (total_seconds // 300) + 1 + 10000
+        seq = (total_seconds // 300) + 1
     else:
-        seq = (total_seconds // 60) + 1 + 10000
+        seq = (total_seconds // 60) + 1
 
-    return f"{date_str}1000{seq}"
+    return f"{date_str}10001{seq:04d}"
 
-# হুবহু পারফেক্ট ড্যাশবোর্ড জেনারেটর
+# অটো হিস্ট্রি সিঙ্ক (লাইভ পিরিয়ড অনুযায়ী ১-৯ নম্বর সারি তৈরি)
+def generate_live_history(current_period_full, tf):
+    global history_rows
+    if len(history_rows) >= 9:
+        return history_rows[-9:]
+
+    # যদি নতুন প্রসেস শুরু হয়, তবে বর্তমান পিরিয়ডের আগের ৯টি পিরিয়ড সিঙ্ক করবে
+    prefix = current_period_full[:-4]
+    curr_seq = int(current_period_full[-4:])
+    
+    generated = []
+    now = datetime.now()
+    step_sec = 30 if tf == "30s" else 60 if tf == "1m" else 180 if tf == "3m" else 300
+
+    for i in range(9, 0, -1):
+        seq = curr_seq - i
+        if seq <= 0:
+            seq = 1000 + seq
+        
+        p_str = f"{prefix}{seq:04d}"
+        sig = random.choice(["BIG", "SMALL"])
+        
+        # HGNICE WinGo লজিক: BIG (5-9), SMALL (0-4)
+        num = random.choice([5,6,7,8,9]) if sig == "BIG" else random.choice([0,1,2,3,4])
+        res = random.choice(["WIN", "WIN", "LOSE", "JACK"])
+        t_str = now.strftime("%I:%M:%S %p")
+        
+        generated.append({
+            "period": p_str,
+            "signal": sig,
+            "num": str(num),
+            "res": res,
+            "time": t_str
+        })
+    
+    history_rows = generated
+    return history_rows[-9:]
+
+# সম্পূর্ণ পারফেক্ট ড্যাশবোর্ড জেনারেটর
 def generate_exact_dashboard(period, signal, confidence, number_pair, tf):
     img = Image.new('RGB', (1000, 1150), color=(255, 255, 255))
     draw = ImageDraw.Draw(img)
 
-    tf_label = "30 Sec" if tf=="30s" else "1 Min" if tf=="1m" else "3 Min" if tf=="5m" else "1 Min"
+    tf_label = "30 Sec" if tf=="30s" else "1 Min" if tf=="1m" else "3 Min" if tf=="3m" else "5 Min"
 
     # ফন্ট লোডার
     f_title = get_font(40, bold=True)
@@ -96,7 +123,7 @@ def generate_exact_dashboard(period, signal, confidence, number_pair, tf):
     f_panel = get_font(20, bold=True)
     f_big_sig = get_font(48, bold=True)
     f_big_num = get_font(36, bold=True)
-    f_table = get_font(17, bold=True)
+    f_table = get_font(16, bold=True)
     f_footer_num = get_font(24, bold=True)
     f_footer_txt = get_font(15, bold=True)
 
@@ -142,7 +169,7 @@ def generate_exact_dashboard(period, signal, confidence, number_pair, tf):
     draw.text((140, 245), f": WinGo {tf_label}", fill=(0, 0, 0), font=f_panel)
 
     draw.text((28, 280), "PERIOD", fill=(100, 116, 139), font=f_panel)
-    draw.text((140, 280), f": {period[-6:]}", fill=(0, 0, 0), font=f_panel)
+    draw.text((140, 280), f": {period}", fill=(0, 0, 0), font=f_panel)
 
     sig_color = (225, 29, 72) if signal == "SMALL" else (37, 99, 235)
     draw.text((28, 315), "SIGNAL", fill=(100, 116, 139), font=f_panel)
@@ -151,7 +178,7 @@ def generate_exact_dashboard(period, signal, confidence, number_pair, tf):
     draw.text((28, 350), "NUMBER", fill=(100, 116, 139), font=f_panel)
     draw.text((140, 350), f": {number_pair}", fill=(16, 185, 129), font=f_panel)
 
-    # মিডল সেন্ট্রাল বক্স
+    # মিডল বক্স
     draw.rectangle([354, 240, 686, 380], outline=sig_color, width=3)
     draw.text((366, 246), "->", fill=(16, 185, 129), font=f_info_head)
     draw.text((435, 244), "CURRENT SIGNAL", fill=(16, 185, 129), font=f_info_val)
@@ -172,27 +199,27 @@ def generate_exact_dashboard(period, signal, confidence, number_pair, tf):
     # ৪. টেবিল হেডার
     draw.rectangle([0, 405, 1000, 432], fill=(10, 15, 25))
     draw.text((26, 410), "#", fill=(255, 255, 255), font=f_info_val)
-    draw.text((172, 410), "PERIOD", fill=(255, 255, 255), font=f_info_val)
+    draw.text((150, 410), "PERIOD", fill=(255, 255, 255), font=f_info_val)
     draw.text((380, 410), "SIGNAL", fill=(255, 255, 255), font=f_info_val)
     draw.text((495, 410), "NUMBER", fill=(255, 255, 255), font=f_info_val)
     draw.text((621, 410), "RESULT", fill=(255, 255, 255), font=f_info_val)
     draw.text((838, 410), "TIME", fill=(255, 255, 255), font=f_info_val)
 
-    # টেবিল ডাটা রেন্ডারিং
+    # লাইভ হিস্ট্রি লোডার (১-৯ নম্বর সারি)
+    dynamic_history = generate_live_history(period, tf)
+
     y = 438
-    display_history = history_rows[-9:]
-    for idx, row in enumerate(display_history):
+    for idx, row in enumerate(dynamic_history):
         bg_row = (248, 250, 252) if idx % 2 == 1 else (255, 255, 255)
         draw.rectangle([0, y-2, 1000, y+38], fill=bg_row)
 
         draw.text((26, y+5), str(idx+1), fill=(100, 116, 139), font=f_table)
-        draw.text((122, y+5), row['period'], fill=(30, 41, 59), font=f_table)
+        draw.text((110, y+5), row['period'], fill=(30, 41, 59), font=f_table)
         
         s_col = (225, 29, 72) if row['signal'] == "SMALL" else (37, 99, 235)
         draw.text((385, y+5), row['signal'], fill=s_col, font=f_table)
         draw.text((526, y+5), str(row['num']), fill=(30, 41, 59), font=f_table)
 
-        # রেজাল্ট ব্যাজ
         res = row['res']
         if res == "WIN":
             draw.rectangle([594, y+2, 668, y+30], fill=(220, 252, 231))
@@ -200,48 +227,43 @@ def generate_exact_dashboard(period, signal, confidence, number_pair, tf):
         elif res == "LOSE":
             draw.rectangle([594, y+2, 668, y+30], fill=(254, 226, 226))
             draw.text((606, y+5), "LOSE", fill=(185, 28, 28), font=f_table)
-        else: # JACK
+        else:
             draw.rectangle([594, y+2, 668, y+30], fill=(254, 249, 195))
             draw.text((606, y+5), "JACK", fill=(161, 98, 7), font=f_table)
 
-        draw.text((812, y+5), row['time'], fill=(100, 116, 139), font=f_table)
+        draw.text((802, y+5), row['time'], fill=(100, 116, 139), font=f_table)
         y += 42
 
-    # ১০ম রানিং রো
+    # ১০ম রানিং রো (বর্তমান সিগন্যাল)
     draw.rectangle([0, y-2, 1000, y+38], fill=(255, 255, 255))
     draw.text((22, y+5), "10", fill=(16, 185, 129), font=f_table)
-    draw.text((172, y+5), period[-6:], fill=(16, 185, 129), font=f_table)
+    draw.text((110, y+5), period, fill=(16, 185, 129), font=f_table)
     draw.text((385, y+5), signal, fill=sig_color, font=f_table)
     draw.text((520, y+5), number_pair, fill=(16, 185, 129), font=f_table)
 
     draw.rectangle([594, y+2, 668, y+30], fill=(219, 234, 254))
     draw.text((606, y+5), "NEXT", fill=(29, 78, 216), font=f_table)
 
-    draw.text((806, y+5), datetime.now().strftime("%I:%M:%S %p"), fill=(16, 185, 129), font=f_table)
+    draw.text((802, y+5), datetime.now().strftime("%I:%M:%S %p"), fill=(16, 185, 129), font=f_table)
 
     # ৫. ফুটার কার্ড
     fy = 880
-    # WINS
     draw.rectangle([18, fy, 204, fy+70], outline=(16, 185, 129), width=2)
     draw.text((88, fy+10), "WINS", fill=(16, 185, 129), font=f_info_head)
     draw.text((78, fy+32), f"{current_wins}", fill=(16, 185, 129), font=f_footer_num)
 
-    # JACKPOT
     draw.rectangle([214, fy, 400, fy+70], outline=(234, 179, 8), width=2)
     draw.text((270, fy+10), "JACKPOT", fill=(234, 179, 8), font=f_info_head)
     draw.text((280, fy+32), f"{jackpot_count}", fill=(234, 179, 8), font=f_footer_num)
 
-    # MAX STREAK
     draw.rectangle([410, fy, 596, fy+70], outline=(239, 68, 68), width=2)
     draw.text((450, fy+10), "MAX STREAK", fill=(239, 68, 68), font=f_info_head)
     draw.text((485, fy+32), f"{max_streak}", fill=(239, 68, 68), font=f_footer_num)
 
-    # WIN RATE
     draw.rectangle([606, fy, 792, fy+70], fill=(239, 246, 255))
     draw.text((660, fy+10), "WIN RATE", fill=(37, 99, 235), font=f_info_head)
     draw.text((655, fy+32), "71.3%", fill=(37, 99, 235), font=f_footer_num)
 
-    # CONFIDENCE
     draw.rectangle([802, fy, 982, fy+70], fill=(243, 232, 255))
     draw.text((840, fy+10), "CONFIDENCE", fill=(147, 51, 234), font=f_info_head)
     draw.text((860, fy+32), f"{confidence}%", fill=(147, 51, 234), font=f_footer_num)
@@ -256,7 +278,7 @@ def generate_exact_dashboard(period, signal, confidence, number_pair, tf):
 
     img.save("exact_dashboard.png")
 
-# সিগন্যাল পোস্ট
+# সিগন্যাল পোস্ট ব্রডকাস্ট
 def broadcast_signal(signal, number_pair, confidence=88):
     global last_prediction, total_predictions
     total_predictions += 1
@@ -268,7 +290,7 @@ def broadcast_signal(signal, number_pair, confidence=88):
     caption = (
         f"👾 MODE : WINGO {tf_label}\n"
         f"╭────────────────╮\n"
-        f"🎰 PERIOD : {period[-6:]}\n"
+        f"🎰 PERIOD : {period}\n"
         f"⚙️ LOGIC  : PART 5 | ENTRY 1\n\n"
         f"┣ 📈 SIGNAL = {'🔴 SMALL' if signal == 'SMALL' else '🔵 BIG'}\n"
         f"┣ \n"
@@ -280,41 +302,57 @@ def broadcast_signal(signal, number_pair, confidence=88):
     with open("exact_dashboard.png", "rb") as photo:
         bot.send_photo(CHANNEL_ID, photo, caption=caption)
 
-    last_prediction = {"period": period[-6:], "signal": signal, "full_period": period}
+    last_prediction = {"period": period, "signal": signal, "num_pair": number_pair}
 
-# রেজাল্ট পোস্ট
-def send_result_message(res_type, num_hit):
+# রেজাল্ট পোস্ট ও HGNICE Market Logic
+def send_result_message(override_res=None, override_num=None):
     global current_wins, jackpot_count, current_streak, history_rows
     
-    period_str = last_prediction['period'] if last_prediction else "010300"
-    sig = last_prediction['signal'] if last_prediction else "SMALL"
-    full_p = last_prediction['full_period'] if last_prediction else get_market_period(selected_timeframe)
+    if not last_prediction:
+        return
 
-    is_big = int(num_hit) >= 5
+    period_str = last_prediction['period']
+    sig = last_prediction['signal']
+
+    # HGNICE WinGo লজিক অনুযায়ী সঠিক রেজাল্ট ডিটারমিনেশন
+    if override_num is not None:
+        num_hit = int(override_num)
+    else:
+        if override_res == "WIN":
+            num_hit = random.choice([5, 6, 7, 8, 9]) if sig == "BIG" else random.choice([0, 1, 2, 3, 4])
+        elif override_res == "JACKPOT":
+            num_hit = int(last_prediction['num_pair'].split('/')[0])
+        else: # LOSE
+            num_hit = random.choice([0, 1, 2, 3, 4]) if sig == "BIG" else random.choice([5, 6, 7, 8, 9])
+
+    # HGNICE Rule: BIG >= 5, SMALL <= 4
+    is_big = num_hit >= 5
+    actual_side = "BIG" if is_big else "SMALL"
     side_emoji = "🔵  BIG" if is_big else "🔴  SMALL"
     now_time = datetime.now().strftime("%I:%M:%S %p")
 
-    if res_type == "WIN":
+    if actual_side == sig:
+        res_type = "WIN"
         current_wins += 1
         current_streak += 1
-        history_rows.append({"period": full_p, "signal": sig, "num": str(num_hit), "res": "WIN", "time": now_time})
         msg = f"✅ WIN!\n================================\nPeriod  =>  #{period_str}\nResult  =>  NUM:{num_hit}  {side_emoji}\n================================"
-
-    elif res_type == "JACKPOT":
-        jackpot_count += 1
-        current_wins += 1
-        current_streak += 1
-        history_rows.append({"period": full_p, "signal": sig, "num": str(num_hit), "res": "JACK", "time": now_time})
-        msg = f"🎰 JACK! NUMBER HIT\n================================\nPeriod  =>  #{period_str}\nResult  =>  NUM:{num_hit}  {side_emoji}\n================================"
-
     else:
+        res_type = "LOSE"
         current_streak = 0
-        history_rows.append({"period": full_p, "signal": sig, "num": str(num_hit), "res": "LOSE", "time": now_time})
         msg = f"❌ LOSS\n================================\nPeriod  =>  #{period_str}\nResult  =>  NUM:{num_hit}  {side_emoji}\n================================"
+
+    # হিস্ট্রিতে যোগ
+    history_rows.append({
+        "period": period_str,
+        "signal": sig,
+        "num": str(num_hit),
+        "res": res_type,
+        "time": now_time
+    })
 
     bot.send_message(CHANNEL_ID, msg)
 
-# অটো লুপ
+# অটো পোলিং লুপ
 def auto_loop():
     while True:
         if auto_mode:
@@ -326,22 +364,14 @@ def auto_loop():
             sleep_time = 30 if selected_timeframe == "30s" else 60 if selected_timeframe == "1m" else 180 if selected_timeframe == "3m" else 300
             time.sleep(sleep_time - 5)
             
-            res_choice = random.choices(["WIN", "JACKPOT", "LOSS"], weights=[65, 15, 20])[0]
-            if res_choice == "WIN":
-                win_num = random.choice([6, 7, 8, 9]) if sig == "BIG" else random.choice([0, 1, 2, 3, 4])
-                send_result_message("WIN", win_num)
-            elif res_choice == "JACKPOT":
-                jack_num = 6 if sig == "BIG" else 2
-                send_result_message("JACKPOT", jack_num)
-            else:
-                loss_num = random.choice([0, 1, 2, 3, 4]) if sig == "BIG" else random.choice([5, 6, 7, 8, 9])
-                send_result_message("LOSS", loss_num)
+            res_choice = random.choices(["WIN", "LOSE"], weights=[75, 25])[0]
+            send_result_message(override_res=res_choice)
 
             time.sleep(5)
         else:
             time.sleep(2)
 
-# ইনলাইন বাটন কন্ট্রোল
+# বোট কন্ট্রোল বাটন
 def get_control_keyboard():
     markup = InlineKeyboardMarkup()
     
@@ -370,7 +400,7 @@ def start_cmd(message):
     if ADMIN_ID != 0 and message.from_user.id != ADMIN_ID:
         bot.reply_to(message, "আপনার এক্সেস নেই।")
         return
-    bot.send_message(message.chat.id, "⚙️ **ST Wingo Master Control Panel**\n\nনিচের কন্ট্রোল বাটনগুলো দিয়ে সার্ভিস পরিচালনা করুন:", reply_markup=get_control_keyboard(), parse_mode="Markdown")
+    bot.send_message(message.chat.id, "⚙️ **ST Wingo Master Control Panel**\n\nনিচের বাটনগুলো দিয়ে বোর্ড পরিচালনা করুন:", reply_markup=get_control_keyboard(), parse_mode="Markdown")
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callbacks(call):
@@ -398,28 +428,28 @@ def handle_callbacks(call):
         bot.answer_callback_query(call.id, "BIG Signal Posted!")
 
     elif call.data == "res_win":
-        send_result_message("WIN", random.choice([6, 7, 8, 9]))
+        send_result_message(override_res="WIN")
         bot.answer_callback_query(call.id, "WIN Result Posted!")
 
     elif call.data == "res_jack":
-        send_result_message("JACKPOT", 6)
+        send_result_message(override_res="JACKPOT")
         bot.answer_callback_query(call.id, "JACKPOT Result Posted!")
 
     elif call.data == "res_loss":
-        send_result_message("LOSS", random.choice([0, 1, 2, 3]))
+        send_result_message(override_res="LOSE")
         bot.answer_callback_query(call.id, "LOSS Result Posted!")
 
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
     threading.Thread(target=auto_loop).start()
     
-    # Render Conflict Error রিকভারি
+    # Render 409 Conflict এবং Webhook পরিষ্কার করার লুপ
     while True:
         try:
-            bot.remove_webhook()
+            bot.remove_webhook(drop_pending_updates=True)
             time.sleep(2)
-            print("Bot polling started...")
+            print("Bot polling started successfully...")
             bot.infinity_polling(skip_pending=True, timeout=20, long_polling_timeout=20)
         except Exception as e:
-            print(f"Error caught: {e}")
+            print(f"Polling Exception: {e}")
             time.sleep(5)
